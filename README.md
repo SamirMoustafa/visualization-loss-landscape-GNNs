@@ -20,21 +20,27 @@ conda activate py310
 # 3. Install cudatoolkit 11.3 and PyTorch dependencies:
 conda install pytorch cudatoolkit=11.3 -c pytorch
 # 4. Clone Visualizing Torch Landscape repository:
-git clone https://gitlab.cs.univie.ac.at/samirm97cs/visualizing_torch_landscape.git && cd visualizing_torch_landscape
-# 5. Install visualizing_torch_landscape:
+git clone https://github.com/SamirMoustafa/visualization-loss-landscape-GNNs.git && cd visualization-loss-landscape-GNNs
+# 5. Install visualization loss landscape GNNs:
 pip install -e .
 ```
 
 # Get Started
-```bash
-from torch_landscape.directions import create_random_directions
-from torch_landscape.landscape import calculate_surface_landscape
-from torch_landscape.visualize import visualize
+```python
+from torch_landscape.directions import LearnableDirections, PcaDirections
+from torch_landscape.landscape_linear import LinearLandscapeCalculator
+from torch_landscape.trajectory import TrajectoryCalculator
+from torch_landscape.utils import clone_parameters
+from torch_landscape.visualize import VisualizationData, Plotly2dVisualization
+from torch_landscape.visualize_options import VisualizationOptions
 
 
-# Define or load your trained model
+# Define the model and the training loop
+# For each step in the training loop
+    intermediate_results.append(clone_parameters(model.parameters()))
 ...
-
+...
+...
 # Define evaluation function that has arguments ONLY two model, and iterative data.
 # Example
 def evaluate_func(model, test_loader):
@@ -50,26 +56,15 @@ def evaluate_func(model, test_loader):
     return test_loss
 
 file_path = "./my_landscape_surface"
-rand_directions = create_random_directions(model=model)
-landscape = calculate_surface_landscape(model=model,
-                                        directions=rand_directions,
-                                        data_loader=data,
-                                        compute_fun=evaluate,
-                                        num_data_point=10, )
-visualize(landscape_dictionary=landscape, file_path=file_path)
+options = VisualizationOptions(num_points=10)
+trajectory = TrajectoryCalculator(optimized_parameters, (b1, b2)).project_disregard_z(intermediate_parameters)
+trajectory.set_range_to_fit_trajectory(options)
+landscape_calculator = LinearLandscapeCalculator(optimized_parameters, (b1, b2), options=options)
+landscape = landscape_calculator.calculate_loss_surface_data_model(model, lambda: evaluate_func(model, data))
+Plotly2dVisualization(VisualizationOptions()).plot(VisualizationData(landscape, trajectory),
+                                                   file_path,
+                                                   file_extension="pdf")
+
 ```
 
 ![mnist_loss_landscape](./assets/mnist_landscape_surface.png)
-
-
-# Development
-
-## Formatting
-- Use `black -l 120` to reformat a file.
-- Use `flake8` to check if a source file is well formatted.
-- To reorder the import statements, use `isort`.
-
-## Unit tests
-Run in directory test:
-- Run code coverage data collection: `python -m coverage run -m unittest`.
-- Create html report with code coverage: `python -m coverage html`.
