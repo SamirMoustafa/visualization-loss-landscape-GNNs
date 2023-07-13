@@ -17,7 +17,6 @@ def increase_parameters(parameters: Iterable[Tensor], addend: Iterable[Tensor]):
     Uses in-place operations.
     """
     for parameter, addend_part in zip(parameters, addend):
-        parameter.requires_grad_(False)
         parameter.add_(addend_part)
 
 
@@ -50,31 +49,32 @@ def _evaluate_row_parallel(
     :param optimized_parameters: The optimized parameters.
     :return: A list of the evaluated values.
     """
-    y_points = range(num_data_point)
-    b1, b2 = directions
-    x_step = (max_x_value - min_x_value) / (num_data_point - 1)
-    y_step = (max_y_value - min_y_value) / (num_data_point - 1)
-    b2_step = [b2_part * y_step for b2_part in b2]
-    b2_step_negative = [-b2_part for b2_part in b2_step]
-    b2_step_direction = b2_step if is_positive_direction else b2_step_negative
+    with no_grad():
+        y_points = range(num_data_point)
+        b1, b2 = directions
+        x_step = (max_x_value - min_x_value) / (num_data_point - 1)
+        y_step = (max_y_value - min_y_value) / (num_data_point - 1)
+        b2_step = [b2_part * y_step for b2_part in b2]
+        b2_step_negative = [-b2_part for b2_part in b2_step]
+        b2_step_direction = b2_step if is_positive_direction else b2_step_negative
 
-    # calculate x coordinate
-    x = min_x_value + x_i * x_step
+        # calculate x coordinate
+        x = min_x_value + x_i * x_step
 
-    results = {}
-    for y_j in y_points if is_positive_direction else y_points[::-1]:
-        # calculate y coordinate
-        y = min_y_value + y_j * y_step
+        results = {}
+        for y_j in y_points if is_positive_direction else y_points[::-1]:
+            # calculate y coordinate
+            y = min_y_value + y_j * y_step
 
-        overwrite_parameters(model_parameters, optimized_parameters, directions, [x, y])
+            overwrite_parameters(model_parameters, optimized_parameters, directions, [x, y])
 
-        # save results to a dictionary
-        results[(x_i, y_j)] = evaluation_function(model_parameters)
+            # save results to a dictionary
+            results[(x_i, y_j)] = evaluation_function(model_parameters)
 
-        if (y_j != num_data_point - 1 and is_positive_direction) or (y_j != 0 and not is_positive_direction):
-            # Step in y-direction (b2).
-            increase_parameters(model_parameters, b2_step_direction)
-    return results
+            if (y_j != num_data_point - 1 and is_positive_direction) or (y_j != 0 and not is_positive_direction):
+                # Step in y-direction (b2).
+                increase_parameters(model_parameters, b2_step_direction)
+        return results
 
 
 class LinearLandscapeCalculator:
@@ -90,11 +90,12 @@ class LinearLandscapeCalculator:
         directions: Tuple[List[Tensor], List[Tensor]],
         min_x_value: int = -1,
         max_x_value: int = 1,
-        num_data_point: int = 50,
         min_y_value: int = -1,
         max_y_value: int = 1,
+        num_data_point: int = 50,
         options: Optional[VisualizationOptions] = None,
         n_jobs: int = 1,
+        parallel_backend: str = "loky",
     ):
         """
         Initializes the linear landscape calculator.
@@ -140,6 +141,7 @@ class LinearLandscapeCalculator:
         self._b2_step_negative = [-b2_part for b2_part in self._b2_step]
         # set the number of jobs to use for parallelization
         self.n_jobs = n_jobs
+        self.parallel_backend = parallel_backend
 
     def calculate_loss_surface_data_model(
         self,
@@ -161,7 +163,13 @@ class LinearLandscapeCalculator:
         model_parameters: List[Tensor],
         evaluation_function: Callable[[Iterable[Tensor]], float],
     ) -> LossSurfaceData:
-
+        """
+        Calculates the loss surface for the specified model.
+        :param model_parameters: the parameters of the model.
+        :param evaluation_function: a function which should evaluate the loss of the model with the specified
+        parameters, provided as first argument.
+        :return: the loss surface data.
+        """
         original_parameters = clone_parameters(model_parameters)
         surface_data = setup_surface_data_linear(
             self._min_x_value, self._max_x_value, self._num_data_point, self._min_y_value, self._max_y_value
@@ -176,7 +184,7 @@ class LinearLandscapeCalculator:
             # 2nd row: (x_min+x_step,y_max), ..., (x_min+x_step, y_min),
             # 3rd row: (x_min+2*x_step, y_min), ...,(x_min+2*x_step, y_max),..
 
-            results = ProgressParallel(n_jobs=self.n_jobs, batch_size=1)(
+            results = ProgressParallel(n_jobs=self.n_jobs, batch_size=1, backend=self.parallel_backend)(
                 delayed(_evaluate_row_parallel)(
                     evaluation_function=evaluation_function,
                     is_positive_direction=bool(x_i % 2 == 0),

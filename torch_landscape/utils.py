@@ -1,7 +1,7 @@
 import os
 from typing import Iterable, List, Optional
 
-from torch import Tensor, no_grad
+from torch import Tensor, no_grad, device
 from torch.nn import Module
 
 
@@ -47,6 +47,16 @@ def clone_parameters(parameters: Iterable[Tensor], detach=False) -> List[Tensor]
         return [param.detach().clone() for param in parameters]
     else:
         return [param.clone() for param in parameters]
+
+
+def move_parameters(parameters: Iterable[Tensor], to_device: device) -> List[Tensor]:
+    """
+    Moves the parameters in the list to another device.
+    :param parameters: The parameters to move.
+    :param to_device: The device to move the parameters to.
+    :return: The parameters on the specified device.
+    """
+    return [param.to(to_device) for param in parameters]
 
 
 def reset_parameters(model: Module, parameters: List[Tensor]):

@@ -62,17 +62,21 @@ class PlotlyVisualization(VisualizationBase, ABC):
         :param fig: The figure to modify.
         :param title: (Optional) The title to set.
         """
+        fig.update_layout(template=self.plotly_template)
+        fig.update_layout(title={"text": (title if self.options.show_title else ""), "x": 0.5})
+
         fig.update_layout(
-            template=self.plotly_template,
-            title=title,
             scene={
-                "xaxis": {"title": "", "showticklabels": False},
-                "yaxis": {"title": "", "showticklabels": False},
-                "zaxis": {"title": "", "showticklabels": False, "type": self.get_z_axis_type(),
-                          },
-            },
-            showlegend=False,
+                "xaxis": {"title": (component_one_name if self.options.show_axis_labels else "")},
+                "yaxis": {"title": (component_two_name if self.options.show_axis_labels else "")},
+                "zaxis": {
+                    "title": (surface_landscape_name if self.options.show_axis_labels else ""),
+                    "type": self.get_z_axis_type(),
+                },
+            }
         )
+
+        fig.update_layout(showlegend=False)
 
     @staticmethod
     def save_file(fig: go.Figure, file_path: Union[str, Path], file_extension: str = "html"):
@@ -235,6 +239,12 @@ class Plotly2dVisualization(PlotlyVisualization):
         x = np.array(data.loss_surface_data.x_coordinates)
         y = np.array(data.loss_surface_data.y_coordinates)
         z = np.array(data.loss_surface_data.z_coordinates)
+
+        # 2d plots do not support a logarithmic z axis directly. Take the logarithm
+        # of the values instead.
+        if self.options.use_log_z:
+            z = np.log(z)
+
         fig = go.Figure(data=go.Contour(x=x, y=y, z=z, contours=dict(), colorscale="viridis", showscale=False))
         if self.mark_zero:
             fig.add_scatter(x=[0], y=[0], mode="markers", name="Zero", marker=dict(size=10, symbol="x", color="red"))

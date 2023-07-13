@@ -205,11 +205,6 @@ class PcaDirections(Directions):
         :param samples: A list of the feature vectors for each sample.
         :return: The covariance matrix.
         """
-        if samples[0].numel()**2 * 32 * 0.000000000125 > 210:
-            raise ValueError(
-                "The covariance matrix is too large to fit in memory. "
-                "Try using a smaller batch size or a smaller model."
-            )
         covariance_matrix = cov(stack(samples, dim=1))
         return covariance_matrix
 
@@ -278,7 +273,7 @@ class LearnableDirections(Directions):
         self,
         optimized_parameters: List[Tensor],
         intermediate_parameters: Union[List[List[Tensor]], List[Tuple[List[Tensor], float]]],
-        learnable_model_device: device = device("cpu"),
+        learnable_model_device: device = device("cuda") if cuda.is_available() else device("cpu"),
         autoencoder_lr: float = 0.01,
         training_epochs: int = 1000,
         early_stopping_epochs: int = 100,

@@ -1,0 +1,17 @@
+name: ssp
+channels:
+  - defaults
+  - pyg
+dependencies:
+  - python=3.8
+  - torchvision
+  - pytorch=1.10.2
+  - cudatoolkit=10.2
+  - jupyter
+  - jupyterlab
+  - seaborn
+  - tensorboard
+  - matplotlib
+  - pyg
+  - pytorch-scatter
+  - pytorch-sparse
